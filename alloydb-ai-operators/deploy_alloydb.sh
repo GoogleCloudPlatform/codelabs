@@ -36,8 +36,8 @@ while [[ "$#" -gt 0 ]]; do
                 exit 1
             fi
             ;;
-        --vm) CREATE_VM=true ;; 
-        *) echo "Unknown parameter passed: $1"; exit 1 ;; 
+        --vm) CREATE_VM=true ;;
+        *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
     shift
 done
@@ -102,63 +102,92 @@ else
     fi
 fi
 
-# 2. Generate random password
+# 2. Generate random password (for new clusters)
 PASSWORD=$(openssl rand -base64 15 | tr -dc 'a-zA-Z0-0' | head -c 16)
 
-# 3. Create AlloyDB Cluster
-echo "Attempting to create AlloyDB cluster..."
-set +e
-gcloud alloydb clusters create $CLUSTER_NAME \
-    --region=$REGION \
-    --network=$NETWORK \
-    --password=$PASSWORD \
-    --subscription-type=TRIAL \
-    --quiet
+# 3. Handle Cluster Creation or Detection
+echo "Checking if cluster $CLUSTER_NAME exists..."
+EXISTING_CLUSTER=$(gcloud alloydb clusters list --region=$REGION --filter="name:clusters/$CLUSTER_NAME" --format="json" 2>/dev/null)
 
-if [ $? -ne 0 ]; then
-    echo "Free Trial cluster creation failed or not available. Attempting Standard cluster..."
+if [[ "$EXISTING_CLUSTER" != "[]" && -n "$EXISTING_CLUSTER" ]]; then
+    echo "Cluster $CLUSTER_NAME already exists."
+    CLUSTER_TYPE=$(echo "$EXISTING_CLUSTER" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data[0].get('subscriptionType', 'STANDARD')) if data else print('STANDARD')")
+    echo "Existing cluster type: $CLUSTER_TYPE"
+    if [[ "$CLUSTER_TYPE" == "TRIAL" ]]; then
+        CPU_COUNT=8
+    else
+        CPU_COUNT=2
+    fi
+else
+    echo "Cluster $CLUSTER_NAME not found. Attempting to create..."
+    set +e
+    CPU_COUNT=8
     gcloud alloydb clusters create $CLUSTER_NAME \
         --region=$REGION \
         --network=$NETWORK \
         --password=$PASSWORD \
-        --subscription-type=STANDARD \
+        --subscription-type=TRIAL \
         --quiet
-    
-    if [ $? -ne 0 ]; then
-        echo "Error: Failed to create AlloyDB cluster."
-        exit 1
-    fi
-fi
-set -e
 
-# 4. Create Primary Instance
-echo "Creating primary instance: $INSTANCE_NAME"
-gcloud alloydb instances create $INSTANCE_NAME \
-    --cluster=$CLUSTER_NAME \
-    --region=$REGION \
-    --cpu-count=2 \
-    --instance-type=PRIMARY \
-    --quiet
+    if [ $? -ne 0 ]; then
+        echo "Free Trial cluster creation failed or not available. Attempting Standard cluster..."
+        CPU_COUNT=2
+        gcloud alloydb clusters create $CLUSTER_NAME \
+            --region=$REGION \
+            --network=$NETWORK \
+            --password=$PASSWORD \
+            --subscription-type=STANDARD \
+            --quiet
+        
+        if [ $? -ne 0 ]; then
+            echo "Error: Failed to create AlloyDB cluster."
+            exit 1
+        fi
+        CLUSTER_TYPE="STANDARD"
+    else
+        CLUSTER_TYPE="TRIAL"
+    fi
+    set -e
+fi
+
+# 4. Create Primary Instance if not exists
+echo "Checking if instance $INSTANCE_NAME exists in cluster $CLUSTER_NAME..."
+EXISTING_INSTANCE=$(gcloud alloydb instances list --cluster=$CLUSTER_NAME --region=$REGION --filter="name:instances/$INSTANCE_NAME" --format="value(name)" 2>/dev/null)
+
+if [[ -z "$EXISTING_INSTANCE" ]]; then
+    echo "Creating primary instance: $INSTANCE_NAME ($CPU_COUNT vCPUs for $CLUSTER_TYPE cluster)"
+    gcloud alloydb instances create $INSTANCE_NAME \
+        --cluster=$CLUSTER_NAME \
+        --region=$REGION \
+        --cpu-count=$CPU_COUNT \
+        --instance-type=PRIMARY \
+        --quiet
+else
+    echo "Instance $INSTANCE_NAME already exists. Skipping creation."
+fi
 
 # 5. Optional: Create VM
 if [ "$CREATE_VM" = true ]; then
-    echo "Creating VM: $VM_NAME in zone $ZONE"
-    gcloud compute instances create $VM_NAME \
-        --zone=$ZONE \
-        --network=$NETWORK \
-        --metadata=startup-script='#!/bin/bash
-        apt-get update
-        apt-get install -y postgresql-client' \
-        --quiet
+    echo "Checking if VM $VM_NAME exists..."
+    VM_EXISTS=$(gcloud compute instances list --filter="name=$VM_NAME" --format="value(name)" --zones=$ZONE 2>/dev/null)
+    if [[ -z "$VM_EXISTS" ]]; then
+        echo "Creating VM: $VM_NAME in zone $ZONE"
+        gcloud compute instances create $VM_NAME \
+            --zone=$ZONE \
+            --network=$NETWORK \
+            --metadata=startup-script='#!/bin/bash
+            apt-get update
+            apt-get install -y postgresql-client' \
+            --quiet
+    else
+        echo "VM $VM_NAME already exists. Skipping creation."
+    fi
 fi
 
 echo "----------------------------------------"
-echo "Deployment SUCCESSFUL"
-echo "Cluster:  $CLUSTER_NAME"
+echo "Deployment Process Completed"
+echo "Cluster:  $CLUSTER_NAME ($CLUSTER_TYPE)"
 echo "Instance: $INSTANCE_NAME"
 echo "Region:   $REGION"
-echo "Password: $PASSWORD"
+[[ -n "$PASSWORD" ]] && echo "Initial Password: $PASSWORD (if new cluster)"
 echo "----------------------------------------"
-if [ "$CREATE_VM" = true ]; then
-    echo "VM $VM_NAME created with psql client."
-fi

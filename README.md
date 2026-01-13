@@ -12,4 +12,5 @@ This repo is organized by the identifier of the codelab.
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `cloud-functions-python-http` | [HTTP Cloud Functions in Python](https://codelabs.developers.google.com/codelabs/cloud-functions-python-http) |
 | `alloydb-ai-operators` | [AlloyDB AI Operators and Reranking](https://codelabs.developers.google.com/codelabs/alloydb-ai-operators) |
-  
+cloud-functions-python-http) |
+| `alloydb-ai-nla` | [Six Recipes for Reaching Near-100% Accurate Text-to-SQL in AlloyDB - codelab](https://codelabs.developers.google.com/codelabs/alloydb-ai-nla) |

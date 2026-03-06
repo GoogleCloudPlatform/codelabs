@@ -44,6 +44,7 @@ def on_load(e: me.LoadEvent):
 class State:
     cluster_name: str = "alloydb-aip-01"
     location: str = "us-central1"
+    instance_name: str = "alloydb-aip-01-pr"
     database_name: str = "quickstart_db"
     request_text: str = ""
     response_text: str = ""
@@ -62,6 +63,10 @@ def on_cluster_name_change(e: me.InputBlurEvent):
 def on_location_change(e: me.InputBlurEvent):
     state = me.state(State)
     state.location = e.value
+
+def on_instance_name_change(e: me.InputBlurEvent):
+    state = me.state(State)
+    state.instance_name = e.value
 
 def on_database_name_change(e: me.InputBlurEvent):
     state = me.state(State)
@@ -86,7 +91,7 @@ class FrontendRunner:
         )
 
 # We create a new runner instance per request to avoid session locking bugs
-def run_query_sync(request_text, cluster_name, location, database_name, project_id):
+def run_query_sync(request_text, cluster_name, location, instance_name, database_name, project_id):
     local_runner = FrontendRunner()
     # Monkeypatch the agent instruction
     # The original was:
@@ -100,7 +105,7 @@ def run_query_sync(request_text, cluster_name, location, database_name, project_
     Answer user questions to the best of your knowledge using provided tools.
     Do not try to generate non-existent data but use the grounded data from the database.
     When you answer questions about Cymbal Logistic activity
-    use the toolset to run query in the AlloyDB cluster {cluster_name} in the location {location}
+    use the toolset to run query in the AlloyDB cluster {cluster_name} instance {instance_name} in the location {location}
     in the project {project_id} in the database {database_name}
     """
     
@@ -228,7 +233,8 @@ def submit_query(e: me.ClickEvent):
     response_text, headers, rows, debug_text = run_query_sync(
         state.request_text, 
         state.cluster_name, 
-        state.location, 
+        state.location,
+        state.instance_name, 
         state.database_name, 
         project_id
     )
@@ -361,6 +367,13 @@ def app():
                 label="Location",
                 value=state.location,
                 on_blur=on_location_change,
+                appearance="outline",
+                style=me.Style(width="100%", border_radius=4)
+            )
+            me.input(
+                label="Instance Name",
+                value=state.instance_name,
+                on_blur=on_instance_name_change,
                 appearance="outline",
                 style=me.Style(width="100%", border_radius=4)
             )

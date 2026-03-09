@@ -24,7 +24,7 @@ from google.adk.agents.llm_agent import Agent
 
 # Google Cloud MCP Server for AlloyDB
 
-MCP_SERVER_URL = "https://alloydb.us-central1.rep.googleapis.com/mcp"
+MCP_SERVER_URL = "https://alloydb.googleapis.com/mcp"
 creds, project_id = default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
 if not creds.valid:
     creds.refresh(GoogleAuthRequest())
@@ -40,7 +40,9 @@ headers = {
     
 connection_params = StreamableHTTPConnectionParams(
     url=MCP_SERVER_URL,
-    headers=headers
+    headers=headers,
+    timeout=300.0,
+    sse_read_timeout=600.0
 )
 
 mcp_toolset = McpToolset(connection_params=connection_params)
@@ -48,6 +50,7 @@ mcp_toolset = McpToolset(connection_params=connection_params)
 
 MODEL_ID = "gemini-3-flash-preview"
 cluster_name="alloydb-aip-01"
+instance_name="alloydb-aip-01-pr"
 location="us-central1"
 database_name="quickstart_db"
 
@@ -61,7 +64,7 @@ root_agent = Agent(
     Answer user questions to the best of your knowledge using provided tools.
     Do not try to generate non-existent data but use the grounded data from the database.
     When you answer questions about Cymbal Logistic activity
-    use the toolset to run query in the AlloyDB cluster {cluster_name} in the location {location}
+    use the toolset to run query in the AlloyDB cluster {cluster_name} instance {instance_name} in the location {location}
     in the project {project_id} in the database {database_name}
     """,
     tools=[mcp_toolset],

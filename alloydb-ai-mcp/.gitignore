@@ -18,6 +18,7 @@ __pycache__/
 
 # uv specific (if using uv's cache in-repo, though usually global)
 .uv/
+uv.lock
 
 # --- Environment Variables & Secrets ---
 # Always ignore files containing credentials or local config

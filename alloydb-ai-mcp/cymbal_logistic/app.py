@@ -93,13 +93,7 @@ class FrontendRunner:
 # We create a new runner instance per request to avoid session locking bugs
 def run_query_sync(request_text, cluster_name, location, instance_name, database_name, project_id):
     local_runner = FrontendRunner()
-    # Monkeypatch the agent instruction
-    # The original was:
-    # "Answer user questions to the best of your knowledge using provided tools.
-    # Do not try to generate non-existent data but use the grounded data from the database.
-    # When you answer questions about Cymbal Logistic activity
-    # use the toolset to run query in the AlloyDB cluster {cluster_name} in the location {location}
-    # in the project {project_id} in the database {database_name}"
+    # The agent instruction is set here
     
     root_agent.instruction = f"""
     Answer user questions to the best of your knowledge using provided tools.
@@ -226,8 +220,7 @@ def submit_query(e: me.ClickEvent):
     state.response_text = ""
     yield
 
-    # Since project_id isn't directly configurable we can extract it from the agent module 
-    # or just use a default/placeholder if it's imported correctly.
+    # Since project_id isn't directly configured in the UI we can extract it from the agent module 
     from data_agent.agent import project_id
     
     response_text, headers, rows, debug_text = run_query_sync(

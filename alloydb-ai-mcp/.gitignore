@@ -1,0 +1,51 @@
+# --- Python & uv ---
+# Ignore the local virtual environment created by uv or venv
+.venv/
+venv/
+ENV/
+env/
+.adk/
+
+# Python build artifacts and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.python-version
+
+# uv specific (if using uv's cache in-repo, though usually global)
+.uv/
+uv.lock
+
+# --- Environment Variables & Secrets ---
+# Always ignore files containing credentials or local config
+.env
+.env.*
+!.env.example
+*.local
+
+# --- Google Cloud SDK (gcloud) ---
+# Ignore local authentication tokens and component logs
+.gsutil/
+.config/gcloud/
+.cloudsdk/
+logs/
+data_access_log*
+
+# --- Shell & OS ---
+# Ignore history files if you run scripts that generate them
+*.log
+.history
+.bash_history
+
+# System files
+.DS_Store
+Thumbs.db
+.AppleDouble
+.LSOverride
+# Files that might be created on external drives or network shares
+.Spotlight-V100
+.Trashes

@@ -1,0 +1,25 @@
+---
+kind: source
+name: cymbal-logistics-sql-source
+type: alloydb-postgres
+project: ##PROJECT_ID##
+region: ##REGION##
+cluster: alloydb-aip-01
+instance: alloydb-aip-01-pr
+database: quickstart_db
+
+---
+# (Optional) Fetches database schemas for context generation in the bulk generation (/generate_bulk_templates) phase.
+kind: tool
+name: list_cymbal_logistics_schemas_tool
+type: postgres-list-tables
+source: cymbal-logistics-sql-source
+description: Use this tool to list all tables and their schemas in the cymbal logistics database.
+
+---
+# (Optional) Executes generated SQL for validation in the bulk generation (/generate_bulk_templates) phase.
+kind: tool
+name: execute_sql_tool
+type: postgres-execute-sql
+source: cymbal-logistics-sql-source
+description: Use this tool to execute SQL against the cymbal logistics database.

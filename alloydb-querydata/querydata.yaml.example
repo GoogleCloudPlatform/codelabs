@@ -1,0 +1,29 @@
+---
+kind: source
+name: gda-api-source
+type: cloud-gemini-data-analytics
+projectId: ##PROJECT_ID##
+
+---
+kind: tool
+name: cloud_gda_query_tool
+type: cloud-gemini-data-analytics-query
+source: gda-api-source
+location: "##REGION##"
+description: Use this tool to send natural language queries to the Gemini Data Analytics API and receive SQL, natural language answers, and explanations.
+context:
+  datasourceReferences:
+    alloydb:
+      databaseReference:
+        projectId: "##PROJECT_ID##"
+        region: "##REGION##"
+        clusterId: "alloydb-aip-01"
+        instanceId: "alloydb-aip-01-pr"
+        databaseId: "quickstart_db"
+      agentContextReference:
+        contextSetId: "<add-context-set-id>"
+generationOptions:
+  generateQueryResult: true
+  generateNaturalLanguageAnswer: true
+  generateExplanation: true
+  generateDisambiguationQuestion: true

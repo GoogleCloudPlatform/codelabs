@@ -167,6 +167,7 @@ if [[ -z "$EXISTING_INSTANCE" ]]; then
             --instance-type=PRIMARY \
             --assign-inbound-public-ip=ASSIGN_IPV4 \
             --outbound-public-ip \
+            --database-flags=password.enforce_complexity=on \
             --quiet
     else
         gcloud alloydb instances create $INSTANCE_NAME \

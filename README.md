@@ -15,6 +15,7 @@ This repo is organized by the identifier of the codelab.
 cloud-functions-python-http) |
 | `alloydb-ai-nla` | [Six Recipes for Reaching Near-100% Accurate Text-to-SQL in AlloyDB - codelab](https://codelabs.developers.google.com/codelabs/alloydb-ai-nla) |
 | `alloydb-ai-mcp` | [Google Cloud MCP for AlloyDB for AI Agents](https://codelabs.developers.google.com/codelabs/alloydb-ai-mcp) |
+| `alloydb-querydata` | [QueryData for AlloyDB using Gemini Data Analytics](https://codelabs.developers.google.com/next26/alloydb-querydata) |
 
 ## Disclaimer
 

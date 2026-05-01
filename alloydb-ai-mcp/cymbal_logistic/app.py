@@ -37,6 +37,8 @@ from google.adk.runners import Runner
 from google.adk.sessions.in_memory_session_service import InMemorySessionService
 from google.genai import types
 
+GLOBAL_SESSION_SERVICE = InMemorySessionService()
+
 def on_load(e: me.LoadEvent):
     me.set_theme_mode("light")
 
@@ -55,6 +57,9 @@ class State:
     has_chart: bool = False
     debug_info: str = ""
     enable_debug: bool = False
+    session_id: str = ""
+    conversation_history: list[str] = field(default_factory=list)
+    context_summary: str = ""
     
 def on_cluster_name_change(e: me.InputBlurEvent):
     state = me.state(State)
@@ -82,7 +87,7 @@ def on_debug_change(e: me.CheckboxChangeEvent):
 
 class FrontendRunner:
     def __init__(self):
-        self.session_service = InMemorySessionService()
+        self.session_service = GLOBAL_SESSION_SERVICE
         self.runner = Runner(
             app_name="cymbal_logistic_frontend",
             agent=root_agent,
@@ -91,17 +96,22 @@ class FrontendRunner:
         )
 
 # We create a new runner instance per request to avoid session locking bugs
-def run_query_sync(request_text, cluster_name, location, instance_name, database_name, project_id):
+def run_query_sync(request_text, cluster_name, location, instance_name, database_name, project_id, session_id, summary):
     local_runner = FrontendRunner()
     # The agent instruction is set here
     
-    root_agent.instruction = f"""
+    instruction = f"""
     Answer user questions to the best of your knowledge using provided tools.
     Do not try to generate non-existent data but use the grounded data from the database.
     When you answer questions about Cymbal Logistic activity
     use the toolset to run query in the AlloyDB cluster {cluster_name} instance {instance_name} in the location {location}
     in the project {project_id} in the database {database_name}
     """
+    
+    if summary:
+        instruction = f"Here is a summary of the previous conversation context to help you answer subsequent questions:\n{summary}\n\n" + instruction
+        
+    root_agent.instruction = instruction
     
     msg = types.Content(
         role="user",
@@ -119,10 +129,9 @@ def run_query_sync(request_text, cluster_name, location, instance_name, database
         local_rows = []
         debug_logs = []
         try:
-            current_session_id = f"session_mesop_{uuid.uuid4().hex[:8]}"
             async for event in local_runner.runner.run_async(
                 user_id="mesop_user",
-                session_id=current_session_id,
+                session_id=session_id,
                 new_message=msg
             ):
                 if event.content and event.content.parts:
@@ -223,16 +232,46 @@ def submit_query(e: me.ClickEvent):
     # Since project_id isn't directly configured in the UI we can extract it from the agent module 
     from data_agent.agent import project_id
     
+    if not state.session_id:
+        state.session_id = f"session_mesop_{uuid.uuid4().hex[:8]}"
+        
+    # Check for compression (threshold: ~500k tokens -> ~2M chars)
+    history_text = "\n".join(state.conversation_history)
+    if len(history_text) > 2000000:
+        summary_prompt = f"Summarize the following conversation history concisely. Focus on the key facts and results retrieved so far:\n\n{history_text}"
+        temp_session_id = f"session_summary_{uuid.uuid4().hex[:8]}"
+        # Call without summary to avoid recursion
+        summary_response, _, _, _ = run_query_sync(
+            summary_prompt, 
+            state.cluster_name, 
+            state.location,
+            state.instance_name, 
+            state.database_name, 
+            project_id,
+            temp_session_id,
+            ""
+        )
+        state.context_summary = summary_response
+        state.conversation_history = []
+        # Generate a new session ID to effectively clear the ADK session history
+        state.session_id = f"session_mesop_{uuid.uuid4().hex[:8]}"
+        
     response_text, headers, rows, debug_text = run_query_sync(
         state.request_text, 
         state.cluster_name, 
         state.location,
         state.instance_name, 
         state.database_name, 
-        project_id
+        project_id,
+        state.session_id,
+        state.context_summary
     )
     
     state.response_text = response_text
+    
+    # Append to history
+    state.conversation_history.append(f"User: {state.request_text}")
+    state.conversation_history.append(f"Agent: {response_text}")
     
     # Fallback to parse JSON from the final response text if no tools intercepted it
     if not headers and not rows and "{" in response_text and "}" in response_text:

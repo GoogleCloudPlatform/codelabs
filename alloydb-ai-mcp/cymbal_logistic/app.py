@@ -55,6 +55,12 @@ class State:
     has_chart: bool = False
     debug_info: str = ""
     enable_debug: bool = False
+    query_history_json: str = "[]"
+    active_query_tab: int = 0
+
+def select_tab(e: me.ClickEvent):
+    state = me.state(State)
+    state.active_query_tab = int(e.key)
     
 def on_cluster_name_change(e: me.InputBlurEvent):
     state = me.state(State)
@@ -93,7 +99,6 @@ class FrontendRunner:
 # We create a new runner instance per request to avoid session locking bugs
 def run_query_sync(request_text, cluster_name, location, instance_name, database_name, project_id):
     local_runner = FrontendRunner()
-    # The agent instruction is set here
     
     root_agent.instruction = f"""
     Answer user questions to the best of your knowledge using provided tools.
@@ -108,106 +113,164 @@ def run_query_sync(request_text, cluster_name, location, instance_name, database
         parts=[types.Part.from_text(text=request_text)]
     )
 
-    full_response = ""
-    grid_headers = []
-    grid_rows = []
+    response_text = ""
+    local_headers = []
+    local_rows = []
+    debug_logs = []
+    query_history_list = []
+    last_sql = ""
     
-    # We need to run the async runner in a sync context because Mesop event handlers are sync/generators
-    async def _run():
-        response_text = ""
-        local_headers = []
-        local_rows = []
-        debug_logs = []
+    current_session_id = f"session_mesop_{uuid.uuid4().hex[:8]}"
+    
+    # Python 3.7+ async run
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+    if loop.is_running():
+        import nest_asyncio
+        nest_asyncio.apply()
+        
+    async_gen = local_runner.runner.run_async(
+        user_id="mesop_user",
+        session_id=current_session_id,
+        new_message=msg
+    )
+    
+    while True:
         try:
-            current_session_id = f"session_mesop_{uuid.uuid4().hex[:8]}"
-            async for event in local_runner.runner.run_async(
-                user_id="mesop_user",
-                session_id=current_session_id,
-                new_message=msg
-            ):
-                if event.content and event.content.parts:
-                    for p in event.content.parts:
-                        if p.text:
-                            response_text += p.text
-                            
-                # Intercept function responses to extract raw data
-                if hasattr(event, "get_function_responses"):
-                    function_responses = event.get_function_responses()
-                    for f_resp in function_responses:
-                        # Depending on the ADK wrapper, it could be a raw dict or a structured object
-                        data = []
-                        if hasattr(f_resp, "response") and hasattr(f_resp.response, "get"):
-                            # typical genai format for part.function_response
-                            res_dict = f_resp.response
-                        elif isinstance(f_resp, dict):
-                            res_dict = f_resp
+            event = loop.run_until_complete(async_gen.__anext__())
+            
+            if event.content and event.content.parts:
+                for p in event.content.parts:
+                    if p.text:
+                        response_text += p.text
+                    
+                    if p.function_call:
+                        name = p.function_call.name
+                        args = p.function_call.args
+                        
+                        # Resiliently extract sqlStatement
+                        sql_statement = ""
+                        if hasattr(args, "get"):
+                            sql_statement = args.get("sqlStatement", "")
                         else:
                             try:
-                                res_dict = f_resp.model_dump()
+                                sql_statement = args.sqlStatement
                             except:
-                                res_dict = {}
-                                
-                        # Suppose AlloyDB MCP returns data under "results" or directly as list
-                        # This is a heuristic based on standard tabular MCP returns
-                        rows = []
-                        if "results" in res_dict and isinstance(res_dict["results"], list):
-                            rows = res_dict["results"]
-                        elif isinstance(res_dict, list):
-                            rows = res_dict
-                        elif isinstance(res_dict.get("content"), list):
+                                try:
+                                    sql_statement = args["sqlStatement"]
+                                except:
+                                    pass
+                                    
+                        if name == "execute_sql_read_only" and sql_statement:
+                            import re
+                            formatted_sql = sql_statement
+                            keywords = ['FROM', 'WHERE', 'AND', 'OR', 'GROUP BY', 'ORDER BY', 'LIMIT', 'JOIN', 'LEFT JOIN', 'INNER JOIN']
+                            for kw in keywords:
+                                formatted_sql = re.sub(rf'\b({kw})\b', r'\n\1', formatted_sql, flags=re.IGNORECASE)
+                            
+                            last_sql = formatted_sql
+                            log_entry = f"👉 **Function Call**: `execute_sql_read_only`\n```sql\n{formatted_sql}\n```"
+                        else:
                             try:
-                                content_list = res_dict["content"]
-                                for c in content_list:
+                                args_str = json.dumps(args, indent=2)
+                            except:
+                                args_str = str(args)
+                            log_entry = f"👉 **Function Call**: `{name}`\n```json\n{args_str}\n```"
+                        debug_logs.insert(0, log_entry)
+                        
+                    if p.function_response:
+                        name = p.function_response.name
+                        response = p.function_response.response
+                        
+                        # Intercept function responses to extract raw data for table rendering
+                        res_dict = {}
+                        if isinstance(response, dict):
+                            res_dict = response
+                        elif hasattr(response, "get"):
+                            res_dict = response
+                        else:
+                            try:
+                                res_dict = response.model_dump()
+                            except:
+                                pass
+                                
+                        rows = []
+                        # 1. Try structuredContent first
+                        if "structuredContent" in res_dict and isinstance(res_dict["structuredContent"], dict):
+                            structured = res_dict["structuredContent"]
+                            if "sqlResults" in structured and isinstance(structured["sqlResults"], list):
+                                for result in structured["sqlResults"]:
+                                    if "rows" in result and "columns" in result:
+                                        headers = [c["name"] for c in result["columns"]]
+                                        for r in result["rows"]:
+                                            if "values" in r:
+                                                row_vals = [v.get("value", "") for v in r["values"]]
+                                                rows.append(dict(zip(headers, row_vals)))
+
+                        # 2. Fallback to text string parsing inside content
+                        if not rows and isinstance(res_dict.get("content"), list):
+                            try:
+                                for c in res_dict["content"]:
                                     if isinstance(c, dict) and c.get("type") == "text":
                                         struct = json.loads(c.get("text", "{}"))
-                                        if isinstance(struct, list):
-                                            rows.extend(struct)
-                                        elif isinstance(struct, dict) and "results" in struct:
-                                            rows.extend(struct["results"])
+                                        if "sqlResults" in struct and isinstance(struct["sqlResults"], list):
+                                            for result in struct["sqlResults"]:
+                                                if "rows" in result and "columns" in result:
+                                                    headers = [c["name"] for c in result["columns"]]
+                                                    for r in result["rows"]:
+                                                        if "values" in r:
+                                                            row_vals = [v.get("value", "") for v in r["values"]]
+                                                            rows.append(dict(zip(headers, row_vals)))
                             except:
                                 pass
                                 
                         if rows and isinstance(rows[0], dict):
-                            if not local_headers:
-                                local_headers = list(rows[0].keys())
+                            # Overwrite to only show the results of the LATEST query in the main UI table
+                            local_headers = list(rows[0].keys())
+                            local_rows = []
                             for row in rows:
                                 local_rows.append([str(row.get(h, "")) for h in local_headers])
                                 
-                if hasattr(event, "get_function_calls"):
-                    calls = event.get_function_calls()
-                    if calls:
-                        for c in calls:
+                            query_history_list.append({
+                                "name": f"Query {len(query_history_list) + 1}",
+                                "query": last_sql,
+                                "headers": local_headers,
+                                "rows": local_rows
+                            })
+                                
+                        # Compact Debug Log Formatting
+                        if name == "execute_sql_read_only":
+                            num_rows = len(rows)
+                            preview = ""
+                            if rows:
+                                preview = json.dumps(rows[:3], indent=2)
+                                if len(rows) > 3:
+                                    preview += f"\n... ({len(rows) - 3} more rows)"
+                            log_entry = f"✅ **Function Response**: `execute_sql_read_only` - Returned {num_rows} row(s)\n```json\n{preview}\n```"
+                        else:
                             try:
-                                if hasattr(c, "name"):
-                                    name = c.name
-                                    args = c.args
-                                elif isinstance(c, dict):
-                                    name = c.get("name")
-                                    args = c.get("args")
-                                else:
-                                    name = "Unknown"
-                                    args = str(c)
-                                debug_logs.append(f"Function Call: {name}\nArguments: {json.dumps(args, indent=2)}")
+                                resp_str = json.dumps(response, indent=2)
                             except:
-                                debug_logs.append(f"Function Call: {str(c)}")
+                                resp_str = str(response)
+                            if len(resp_str) > 1000:
+                                resp_str = resp_str[:1000] + "\n... (truncated)"
+                            log_entry = f"✅ **Function Response**: `{name}`\n```json\n{resp_str}\n```"
+                        
+                        debug_logs.insert(0, log_entry)
 
+            yield response_text, local_headers, local_rows, "\n\n".join(debug_logs), query_history_list
+
+        except StopAsyncIteration:
+            break
         except Exception as e:
             response_text = f"Error: {str(e)}"
-        return response_text, local_headers, local_rows, "\n\n".join(debug_logs)
-        
-    # Python 3.7+ async run
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import nest_asyncio
-            nest_asyncio.apply()
-            full_response, grid_headers, grid_rows, debug_info = loop.run_until_complete(_run())
-        else:
-            full_response, grid_headers, grid_rows, debug_info = asyncio.run(_run())
-    except RuntimeError:
-        full_response, grid_headers, grid_rows, debug_info = asyncio.run(_run())
-        
-    return full_response, grid_headers, grid_rows, debug_info
+            yield response_text, local_headers, local_rows, "\n\n".join(debug_logs), query_history_list
+            break
+
 
 def submit_query(e: me.ClickEvent):
     state = me.state(State)
@@ -218,22 +281,39 @@ def submit_query(e: me.ClickEvent):
     state.is_loading = True
     state.error_message = ""
     state.response_text = ""
+    state.debug_info = ""
+    state.grid_headers = []
+    state.grid_rows = []
+    state.query_history_json = "[]"
+    state.active_query_tab = 0
     yield
 
-    # Since project_id isn't directly configured in the UI we can extract it from the agent module 
     from data_agent.agent import project_id
     
-    response_text, headers, rows, debug_text = run_query_sync(
+    response_text = ""
+    headers = []
+    rows = []
+    debug_text = ""
+
+    for resp_t, heads, rws, dbg_t, history in run_query_sync(
         state.request_text, 
         state.cluster_name, 
         state.location,
         state.instance_name, 
         state.database_name, 
         project_id
-    )
-    
-    state.response_text = response_text
-    
+    ):
+        response_text = resp_t
+        headers = heads
+        rows = rws
+        debug_text = dbg_t
+        
+        # Stream logs to UI so the user sees progress
+        state.debug_info = debug_text
+        state.response_text = response_text
+        state.query_history_json = json.dumps(history)
+        yield
+
     # Fallback to parse JSON from the final response text if no tools intercepted it
     if not headers and not rows and "{" in response_text and "}" in response_text:
         start = response_text.find('{')
@@ -275,7 +355,6 @@ def submit_query(e: me.ClickEvent):
 
     state.grid_headers = headers
     state.grid_rows = rows
-    state.debug_info = debug_text
     state.is_loading = False
     
     request_lower = state.request_text.lower()
@@ -294,7 +373,7 @@ except TypeError:
 @me.page(
     path="/",
     on_load=on_load,
-    title="Cymbal Logistic Agent",
+    title="Cymbal Logistics Agent",
     security_policy=sec_policy,
 )
 def app():
@@ -312,19 +391,32 @@ def app():
             link.type = 'image/png';
             link.href = '/static/cymbal_logo_v2.png?v=2';
             document.head.appendChild(link);
-            document.title = "Cymbal Logistic Agent";
+            document.title = "Cymbal Logistics Agent";
         }, 100);
     </script>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Lexend+Deca:wght@800;900&display=swap');
         /* Force inputs to be clean white boxes */
         .mat-mdc-text-field-wrapper, 
         .mdc-text-field { 
             background-color: #FFFFFF !important; 
-            border-radius: 4px !important; 
+            border-radius: 8px !important; 
         }
         /* Hide the bottom ripple line */
         .mdc-line-ripple {
             display: none !important;
+        }
+        /* Custom Button Interactions */
+        .custom-btn {
+            transition: background-color 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;
+        }
+        .custom-btn:hover {
+            background-color: #222222 !important;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .custom-btn:active {
+            transform: translateY(0);
         }
     </style>
     """)
@@ -333,21 +425,22 @@ def app():
         display="flex",
         flex_direction="row",
         height="100vh",
-        background="#F0F8FF", # light alice blue
-        font_family="Google Sans, Roboto, sans-serif",
-        color="#202124"
+        background="linear-gradient(135deg, #F5F4F0 0%, #EAE7E0 100%)",
+        font_family="'Outfit', 'Inter', 'Google Sans', sans-serif",
+        color="#111111"
     )):
         # Left Sidebar (Configurations)
         with me.box(style=me.Style(
-            width="300px",
-            background="#E3F2FD", # light blue
+            width="320px",
+            background="rgba(255, 255, 255, 0.4)",
+            backdrop_filter="blur(20px)",
             padding=me.Padding.all(24),
-            border=me.Border(right=me.BorderSide(width=1, style="solid", color="#BBDEFB")),
+            border=me.Border(right=me.BorderSide(width=1, style="solid", color="rgba(255, 255, 255, 0.3)")),
             display="flex",
             flex_direction="column",
             gap=16
         )):
-            me.text("Database Config", type="headline-6", style=me.Style(margin=me.Margin(bottom=16), color="#1A73E8", font_weight="500"))
+            me.text("Database Config", type="headline-6", style=me.Style(margin=me.Margin(bottom=16), color="#000000", font_weight="600"))
             
             me.input(
                 label="Cluster Name",
@@ -387,26 +480,27 @@ def app():
         )):
             # Hero Header
             with me.box(style=me.Style(
-                width="100%", 
-                height="120px",
-                margin=me.Margin(top=16),
-                border_radius=8,
-                background="linear-gradient(to bottom, #64B5F6 0%, #1976D2 100%)",
+                height="100px",
+                margin=me.Margin(top=24, left=32, right=32),
+                border_radius=16,
+                background="rgba(255, 255, 255, 0.6)",
+                backdrop_filter="blur(20px)",
                 display="flex",
                 flex_direction="row",
                 align_items="center",
-                padding=me.Padding(left=32, right=32),
-                box_shadow="0 2px 4px rgba(0,0,0,0.1)"
+                padding=me.Padding.symmetric(horizontal=24),
+                border=me.Border.all(me.BorderSide(width=1, style="solid", color="rgba(255, 255, 255, 0.5)")),
+                box_shadow="0 8px 32px rgba(0, 0, 0, 0.04)"
             )):
                 me.image(
                     src="/static/cymbal_logo_v2.png",
                     style=me.Style(
-                        height="80px",
-                        margin=me.Margin(right=24),
+                        height="60px",
+                        margin=me.Margin(right=16),
                         border_radius=8
                     )
                 )
-                me.text("Cymbal Logistic Agent", type="headline-3", style=me.Style(color="#FFFFFF", font_weight="600", margin=me.Margin(top=0, bottom=0, left=0, right=0)))
+                me.text("Cymbal Logistics Agent", style=me.Style(color="#000000", font_weight=900, font_family="'Avant Garde', 'Avantgarde', 'Century Gothic', sans-serif", font_size="36px", letter_spacing="-1.5px", margin=me.Margin(top=0, bottom=0, left=0, right=0)))
             
             # Content Area
             with me.box(style=me.Style(
@@ -417,11 +511,12 @@ def app():
             )):
                 # Top Right: Input Area
                 with me.box(style=me.Style(
-                    background="#E3F2FD", # light blue
+                    background="rgba(255, 255, 255, 0.7)",
+                    backdrop_filter="blur(20px)",
                     padding=me.Padding.all(24),
-                    border_radius=8,
-                    border=me.Border.all(me.BorderSide(width=1, style="solid", color="#BBDEFB")),
-                    box_shadow="0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15)",
+                    border_radius=16,
+                    border=me.Border.all(me.BorderSide(width=1, style="solid", color="rgba(255, 255, 255, 0.6)")),
+                    box_shadow="0 8px 32px rgba(0, 0, 0, 0.04)",
                     display="flex",
                     flex_direction="column",
                     gap=16
@@ -442,52 +537,92 @@ def app():
                         style=me.Style(width="100%", border_radius=4)
                     )
                     
-                    with me.box(style=me.Style(display="flex", justify_content="flex-end")):
-                        me.button(
-                            "Submit Request",
+                    with me.box(style=me.Style(display="flex", justify_content="space-between", align_items="center")):
+                        # Left Side: Spinner (if loading)
+                        if state.is_loading:
+                            with me.box(style=me.Style(display="flex", flex_direction="row", gap=12, align_items="center")):
+                                me.progress_spinner()
+                                me.text("Agent is thinking...", style=me.Style(color="#5F6368", font_weight="500"))
+                        else:
+                            me.box() # Empty box to keep space-between working
+                            
+                        with me.box(
+                            classes="custom-btn",
                             on_click=submit_query,
-                            type="raised",
-                            color="primary"
-                        )
+                            style=me.Style(
+                                background="#000000",
+                                color="#FFFFFF",
+                                padding=me.Padding.symmetric(vertical=12, horizontal=32),
+                                border_radius=8,
+                                cursor="pointer",
+                                display="flex",
+                                align_items="center",
+                                justify_content="center"
+                            )
+                        ):
+                            me.text("Submit Request", style=me.Style(font_weight="500", font_size="14px"))
                     
                     if state.error_message:
                         me.text(state.error_message, style=me.Style(color="#D93025", font_weight="500"))
             
                 # Bottom Right: Results Area
-                if state.is_loading:
-                    with me.box(style=me.Style(display="flex", flex_direction="row", gap=12, align_items="center")):
-                        me.progress_spinner()
-                        me.text("Agent is thinking...", style=me.Style(color="#5F6368", font_weight="500"))
-                    
-                elif state.response_text:
+                if state.response_text or state.debug_info:
                     with me.box(style=me.Style(
-                        background="#E3F2FD", # light blue
+                        background="rgba(255, 255, 255, 0.7)",
+                        backdrop_filter="blur(20px)",
                         padding=me.Padding.all(24),
-                        border_radius=8,
-                        border=me.Border.all(me.BorderSide(width=1, style="solid", color="#BBDEFB")),
-                        box_shadow="0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15)",
+                        border_radius=16,
+                        border=me.Border.all(me.BorderSide(width=1, style="solid", color="rgba(255, 255, 255, 0.6)")),
+                        box_shadow="0 8px 32px rgba(0, 0, 0, 0.04)",
                         display="flex",
                         flex_direction="column",
                         gap=24
                     )):
-                        if state.has_chart and state.grid_headers and len(state.grid_headers) >= 2:
-                            me.text("Data Visualization", type="subtitle-1", style=me.Style(font_weight="bold", color="#1A73E8"))
-                        else:
-                            me.text("Response", type="subtitle-1", style=me.Style(font_weight="bold", color="#1A73E8"))
-                            me.markdown(state.response_text)
+                        if state.response_text:
+                            if state.has_chart and state.grid_headers and len(state.grid_headers) >= 2:
+                                me.text("Data Visualization", type="subtitle-1", style=me.Style(font_weight="bold", color="#000000"))
+                            else:
+                                me.text("Response", type="subtitle-1", style=me.Style(font_weight="bold", color="#000000"))
+                                me.markdown(state.response_text)
                         
-                        if state.grid_headers:
-                            me.text("Data Query Results", type="subtitle-1", style=me.Style(font_weight="bold", margin=me.Margin(top=16)))
-                            with me.box(style=me.Style(max_height="400px", overflow_y="auto")):
-                                # me.table format accepts Pandas DataFrames directly
-                                try:
-                                    df_table = pd.DataFrame(state.grid_rows, columns=state.grid_headers)
-                                    me.table(df_table, header=me.TableHeader(sticky=True))
-                                except Exception as e:
-                                    me.text(f"Could not render table: {str(e)}", style=me.Style(color="red"))
+                        query_history = json.loads(state.query_history_json) if state.query_history_json else []
+                        if query_history and not state.is_loading:
+                            me.text("Data Query Results", type="subtitle-1", style=me.Style(font_weight="bold", margin=me.Margin(top=16), color="#000000"))
+                            
+                            # Tab Strip
+                            with me.box(style=me.Style(display="flex", flex_direction="row", gap=8, margin=me.Margin(bottom=16), overflow_x="auto")):
+                                for idx, q in enumerate(query_history):
+                                    is_active = (idx == state.active_query_tab)
+                                    with me.box(
+                                        key=str(idx),
+                                        on_click=select_tab,
+                                        style=me.Style(
+                                            padding=me.Padding.symmetric(vertical=8, horizontal=16),
+                                            border_radius=8,
+                                            background="#000000" if is_active else "rgba(0, 0, 0, 0.05)",
+                                            color="#FFFFFF" if is_active else "#000000",
+                                            cursor="pointer",
+                                            font_weight="500",
+                                            font_size="13px",
+                                            white_space="nowrap"
+                                        )
+                                    ):
+                                        me.text(q["name"])
+                                        
+                            # Active Tab Content
+                            active_tab = query_history[state.active_query_tab] if state.active_query_tab < len(query_history) else None
+                            if active_tab:
+                                if "query" in active_tab and active_tab["query"]:
+                                    me.markdown(f"```sql\n{active_tab['query']}\n```")
+                                with me.box(style=me.Style(max_height="400px", overflow_y="auto", margin=me.Margin(top=12))):
+                                    try:
+                                        df_table = pd.DataFrame(active_tab["rows"], columns=active_tab["headers"])
+                                        me.table(df_table, header=me.TableHeader(sticky=True))
+                                    except Exception as e:
+                                        me.text(f"Could not render table: {str(e)}", style=me.Style(color="red"))
                                 
                         if state.has_chart and state.grid_headers and len(state.grid_headers) >= 2:
-                            me.text("Chart Analysis", type="subtitle-1", style=me.Style(font_weight="bold", margin=me.Margin(top=16)))
+                            me.text("Chart Analysis", type="subtitle-1", style=me.Style(font_weight="bold", margin=me.Margin(top=16), color="#000000"))
                             
                             try:
                                 # Plot a simple bar chart using the first categorical col and first numeric col
@@ -523,7 +658,7 @@ def app():
                                 # Sort by numeric column
                                 d = d.sort_values(by=numeric_col, ascending=False).head(15) 
                                     
-                                ax.bar(d[category_col].astype(str), d[numeric_col], color="#1976D2")
+                                ax.bar(d[category_col].astype(str), d[numeric_col], color="#000000")
                                 ax.set_ylabel(numeric_col)
                                 ax.set_xlabel(category_col)
                                 ax.set_title(f"Chart: {numeric_col} by {category_col}")
@@ -539,14 +674,12 @@ def app():
                         is_debug_env = os.environ.get("DEBUG", "false").lower() == "true"
                         is_debug = is_debug_env or state.enable_debug
                         if is_debug and state.debug_info:
-                            me.text("Debug Execution Logs", type="subtitle-1", style=me.Style(font_weight="bold", margin=me.Margin(top=16)))
+                            me.text("Debug Execution Logs", type="subtitle-1", style=me.Style(font_weight="bold", margin=me.Margin(top=16), color="#000000"))
                             with me.box(style=me.Style(
-                                background="#333333",
-                                color="#00FF00",
+                                background="rgba(0, 0, 0, 0.02)",
                                 padding=me.Padding.all(16),
-                                border_radius=8,
-                                font_family="monospace",
-                                font_size="14px",
-                                white_space="pre-wrap"
+                                border_radius=12,
+                                border=me.Border.all(me.BorderSide(width=1, style="solid", color="rgba(0, 0, 0, 0.05)")),
+                                font_size="14px"
                             )):
-                                me.text(state.debug_info)
+                                me.markdown(state.debug_info)

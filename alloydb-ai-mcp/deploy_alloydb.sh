@@ -59,6 +59,7 @@ echo "Enabling required APIs..."
 gcloud services enable alloydb.googleapis.com \
                        compute.googleapis.com \
                        servicenetworking.googleapis.com \
+                       discoveryengine.googleapis.com \
                        --quiet
 
 # 1. Evaluate and prepare network for Private Service Access (PSA)
@@ -161,6 +162,7 @@ if [[ -z "$EXISTING_INSTANCE" ]]; then
         --region=$REGION \
         --cpu-count=$CPU_COUNT \
         --instance-type=PRIMARY \
+        --database-flags="google_ml_integration.enable_model_support=on,google_ml_integration.enable_ai_query_engine=on,google_ml_integration.enable_preview_ai_functions=on" \
         --quiet
 else
     echo "Instance $INSTANCE_NAME already exists. Skipping creation."
@@ -183,6 +185,13 @@ if [ "$CREATE_VM" = true ]; then
         echo "VM $VM_NAME already exists. Skipping creation."
     fi
 fi
+
+# 6. Add required permissions for AI Functions
+PROJECT_NUMBER=$(gcloud projects describe ${PROJECT_ID} --format="value(projectNumber)")
+
+gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+    --member="serviceAccount:service-${PROJECT_NUMBER}@gcp-sa-alloydb.iam.gserviceaccount.com" \
+    --role="roles/discoveryengine.viewer"
 
 echo "----------------------------------------"
 echo "Deployment Process Completed"

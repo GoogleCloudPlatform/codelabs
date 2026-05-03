@@ -175,7 +175,7 @@ def run_query_sync(request_text, cluster_name, location, instance_name, database
                                 except:
                                     pass
                                     
-                        if name == "execute_sql_read_only" and sql_statement:
+                        if sql_statement:
                             import re
                             formatted_sql = sql_statement
                             keywords = ['FROM', 'WHERE', 'AND', 'OR', 'GROUP BY', 'ORDER BY', 'LIMIT', 'JOIN', 'LEFT JOIN', 'INNER JOIN']
@@ -183,7 +183,7 @@ def run_query_sync(request_text, cluster_name, location, instance_name, database
                                 formatted_sql = re.sub(rf'\b({kw})\b', r'\n\1', formatted_sql, flags=re.IGNORECASE)
                             
                             last_sql = formatted_sql
-                            log_entry = f"👉 **Function Call**: `execute_sql_read_only`\n```sql\n{formatted_sql}\n```"
+                            log_entry = f"👉 **Function Call**: `{name}`\n```sql\n{formatted_sql}\n```"
                         else:
                             try:
                                 args_str = json.dumps(args, indent=2)
@@ -238,19 +238,25 @@ def run_query_sync(request_text, cluster_name, location, instance_name, database
                             except:
                                 pass
                                 
+                        # Always append query to the tabs, even if it has 0 rows or errored
+                        local_headers = list(rows[0].keys()) if (rows and isinstance(rows[0], dict)) else ["Result"]
+                        local_rows = []
+                        
                         if rows and isinstance(rows[0], dict):
-                            # Overwrite to only show the results of the LATEST query in the main UI table
-                            local_headers = list(rows[0].keys())
-                            local_rows = []
                             for row in rows:
                                 local_rows.append([str(row.get(h, "")) for h in local_headers])
-                                
-                            query_history_list.append({
-                                "name": f"Query {len(query_history_list) + 1}",
-                                "query": last_sql,
-                                "headers": local_headers,
-                                "rows": local_rows
-                            })
+                        elif "structuredContent" in res_dict and "metadata" in res_dict["structuredContent"]:
+                            msg = res_dict["structuredContent"]["metadata"].get("message", "Returned 0 rows")
+                            local_rows.append([msg])
+                        else:
+                            local_rows.append(["Returned 0 rows"])
+                            
+                        query_history_list.append({
+                            "name": f"Query {len(query_history_list) + 1}",
+                            "query": last_sql,
+                            "headers": local_headers,
+                            "rows": local_rows
+                        })
                                 
                         # Compact Debug Log Formatting
                         if name == "execute_sql_read_only":

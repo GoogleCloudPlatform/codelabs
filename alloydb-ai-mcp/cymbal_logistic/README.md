@@ -1,4 +1,4 @@
-# Cymbal Logistic Agent
+# Cymbal Logistics Agent
 
 This application is an AI-powered conversational agent that leverages the Google Autonomous Data Kit (ADK) alongside a sleek frontend generated with Google Mesop.
 

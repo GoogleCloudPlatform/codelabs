@@ -111,6 +111,7 @@ def run_query_sync(request_text, cluster_name, location, instance_name, database
     When you answer questions about Cymbal Logistic activity
     use the toolset to run query in the AlloyDB cluster {cluster_name} instance {instance_name} in the location {location}
     in the project {project_id} in the database {database_name}
+    Use ai schema to use AI functions and models like gemini-3-flash-preview with the functions from the schema.
     """
     
     if summary:

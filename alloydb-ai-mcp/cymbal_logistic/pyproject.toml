@@ -19,7 +19,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12.11"
 dependencies = [
-    "google-adk>=1.26.0",
+    "google-adk[mcp]>=1.26.0",
     "google-auth>=2.48.0",
     "matplotlib>=3.10.8",
     "mesop>=1.2.2",

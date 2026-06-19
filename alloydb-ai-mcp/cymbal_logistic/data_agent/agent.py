@@ -48,7 +48,7 @@ connection_params = StreamableHTTPConnectionParams(
 mcp_toolset = McpToolset(connection_params=connection_params)
 
 
-MODEL_ID = "gemini-3-flash-preview"
+MODEL_ID = "gemini-3.5-flash"
 cluster_name="alloydb-aip-01"
 instance_name="alloydb-aip-01-pr"
 location="us-central1"
@@ -66,7 +66,7 @@ root_agent = Agent(
     When you answer questions about Cymbal Logistic activity
     use the toolset to run query in the AlloyDB cluster {cluster_name} instance {instance_name} in the location {location}
     in the project {project_id} in the database {database_name}
-    Use ai schema to use AI functions and models like gemini-3-flash-preview with the functions from the schema.
+    Use ai schema to use AI functions and models like gemini-3.5-flash with the functions from the schema.
     """,
     tools=[mcp_toolset],
 )

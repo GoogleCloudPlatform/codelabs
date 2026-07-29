@@ -1,0 +1,25 @@
+{
+  "facets": [
+    {
+      "sql_snippet": "real_estate.properties.is_condo = FALSE AND real_estate.properties.is_single_family = TRUE AND real_estate.properties.listing_status = 'Active' AND real_estate.properties.bedrooms BETWEEN 3 AND 4 AND real_estate.properties.bathrooms >= 2.0 AND 500 > (SELECT m.crime_rate_per_100k FROM real_estate.cities c JOIN real_estate.municipalities m ON c.municipality_id = m.municipality_id AND c.city_id = real_estate.properties.city_id) AND 2 >= (SELECT MIN(stp.proximity_miles) FROM real_estate.school_to_property stp WHERE real_estate.properties.property_id = stp.property_id)",
+      "intent": "for starter family (between 3 and 4 bedrooms, 2+ bathrooms, low crime and close proximity to schools)",
+      "manifest": "for starter family",
+      "parameterized": {
+        "parameterized_intent": "for starter family (between 3 and 4 bedrooms, 2+ bathrooms, low crime and close proximity to schools)",
+        "parameterized_sql_snippet": "real_estate.properties.is_condo = FALSE AND real_estate.properties.is_single_family = TRUE AND real_estate.properties.listing_status = 'Active' AND real_estate.properties.bedrooms BETWEEN 3 AND 4 AND real_estate.properties.bathrooms >= 2.0 AND 500 > (SELECT m.crime_rate_per_100k FROM real_estate.cities c JOIN real_estate.municipalities m ON c.municipality_id = m.municipality_id AND c.city_id = real_estate.properties.city_id) AND 2 >= (SELECT MIN(stp.proximity_miles) FROM real_estate.school_to_property stp WHERE real_estate.properties.property_id = stp.property_id)"
+      }
+    }
+  ],
+  "templates": [
+    {
+      "nl_query": "Riverside houses close to good schools.",
+      "sql": "SELECT \"p\".\"address_street\", \"p\".\"address_postal_code\", \"s\".\"school_name\", \"stp\".\"proximity_miles\" FROM \"real_estate\".\"properties\" AS \"p\" JOIN \"real_estate\".\"cities\" AS \"c\" ON \"p\".\"city_id\" = \"c\".\"city_id\" JOIN \"real_estate\".\"school_to_property\" AS \"stp\" ON \"p\".\"property_id\" = \"stp\".\"property_id\" JOIN \"real_estate\".\"schools\" AS \"s\" ON \"stp\".\"school_id\" = \"s\".\"school_id\" WHERE \"c\".\"city_name\" = 'Riverside' AND \"s\".\"school_ranking\" <= 5 AND \"stp\".\"proximity_miles\" <= 2 ORDER BY 0.8 * \"s\".\"school_ranking\" + 0.2 * \"stp\".\"proximity_miles\"",
+      "intent": "Riverside houses close to good schools.",
+      "manifest": "A given city houses close to good schools.",
+      "parameterized": {
+        "parameterized_intent": "$1 houses close to good schools.",
+        "parameterized_sql": "SELECT \"p\".\"address_street\", \"p\".\"address_postal_code\", \"s\".\"school_name\", \"stp\".\"proximity_miles\" FROM \"real_estate\".\"properties\" AS \"p\" JOIN \"real_estate\".\"cities\" AS \"c\" ON \"p\".\"city_id\" = \"c\".\"city_id\" JOIN \"real_estate\".\"school_to_property\" AS \"stp\" ON \"p\".\"property_id\" = \"stp\".\"property_id\" JOIN \"real_estate\".\"schools\" AS \"s\" ON \"stp\".\"school_id\" = \"s\".\"school_id\" WHERE \"c\".\"city_name\" = $1 AND \"s\".\"school_ranking\" <= 5 AND \"stp\".\"proximity_miles\" <= 2 ORDER BY 0.8 * \"s\".\"school_ranking\" + 0.2 * \"stp\".\"proximity_miles\""
+      }
+    }
+  ]
+}

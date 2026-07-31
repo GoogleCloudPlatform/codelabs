@@ -1,4 +1,3 @@
-
 CREATE EXTENSION IF NOT EXISTS vector;
 DROP SCHEMA IF EXISTS real_estate CASCADE;
 CREATE SCHEMA real_estate;
@@ -107,7 +106,7 @@ INSERT INTO real_estate.municipalities (municipality_name, average_school_rankin
 ('Santa Clara', 9.10, 2500.00),
 ('Riverside', 6.50, 4100.15),
 ('San Diego', 8.20, 3800.40),
-('Del Mar', 9.50, 2100.10),
+('Del Mar', 9.50, 410.10),
 ('La Jolla', 9.40, 2200.75),
 ('Westwood', 9.20, 3500.00);
 -- Populating cities
@@ -161,7 +160,11 @@ INSERT INTO real_estate.properties (property_id, address_street, city_id, addres
 (27, '200 Coast Blvd', 6, '92014', 6500000.00, 4, 4.5, 'Active', TRUE, FALSE, TRUE, 3),
 (28, '100 Del Mar Heights Rd', 6, '92014', 1500000.00, 2, 2.0, 'Pending', FALSE, TRUE, FALSE, 1),
 (29, '100 Wilshire Blvd, Unit 5A', 7, '90024', 950000.00, 1, 1.0, 'Active', FALSE, TRUE, FALSE, 1),
-(30, '450 Veteran Ave', 7, '90024', 3800000.00, 4, 3.5, 'Pending', TRUE, FALSE, TRUE, 2);
+(30, '450 Veteran Ave', 7, '90024', 3800000.00, 4, 3.5, 'Pending', TRUE, FALSE, TRUE, 2),
+(31, '999 Main Ave', 6, '90024', 3800000.00, 4, 3.5, 'Active', TRUE, FALSE, TRUE, 1),
+(32, '999 Main St', 8, '99999', 3800000.00, 4, 3.5, 'Sold', TRUE, FALSE, TRUE, 1);
+
+
 -- ID 3: Waterfront (Lake/River, updated to panoramic vista)
 UPDATE real_estate.properties
 SET description = 'Spacious 4-bedroom executive home on a half-acre lot. This beautiful property features an unobstructed, panoramic view of the lake, offering a truly breathtaking lifestyle. Includes two fireplaces and a triple garage.'
@@ -192,7 +195,7 @@ SET description = 'Classic 4-bed single-family home on a wooded, lush cul-de-sac
 WHERE property_id = 14;
 -- ID 15: Compact Condo (Convenience/No View)
 UPDATE real_estate.properties
-SET description = 'Compact 1-bedroom condo perfect for students or first-time buyers. All about convenience and interior finishes, no view noted. High walk score, very central location. Monthly HOA covers heat. Newly remodeled and move-in ready.'
+SET description = 'Compact 1-bedroom condo perfect for students or first-time buyers. All about convenience and interior finishes, no view noted. High walk score, very central location. Monthly HOA covers heat. Newly remodeled and move-in ready. Kitchen appliances have been upgraded recently.'
 WHERE property_id = 15;
 -- ID 19: Bungalow (Tucked Away/Rooftops)
 UPDATE real_estate.properties
@@ -239,7 +242,8 @@ INSERT INTO real_estate.property_transactions (property_id, sale_date, sale_pric
 (10, '2025-09-01', 550000.00, 4),
 (18, '2025-08-28', 610000.00, 4),
 (27, '2025-10-10', 6450000.00, 6),
-(30, '2025-09-30', 3800000.00, 7);
+(30, '2025-09-30', 3800000.00, 7),
+(32, '2025-09-12', 1000000, 7);
 -- Populating offers
 INSERT INTO real_estate.offers (offer_id, property_id, buyer_agent_id, seller_agent_id, offer_amount, offer_date, offer_status, offer_expiration_date, contingencies) VALUES
 (1, 3, 3, 1, 1250000.00, '2025-05-18', 'ACCEPTED', '2025-05-20', 'Clear closing in 5 days'),

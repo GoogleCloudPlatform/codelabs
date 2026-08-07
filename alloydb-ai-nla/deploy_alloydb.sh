@@ -103,7 +103,7 @@ else
 fi
 
 # 2. Generate random password (for new clusters)
-PASSWORD=$(openssl rand -base64 15 | tr -dc 'a-zA-Z0-0' | head -c 16)
+PASSWORD=$(openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 16)
 
 # 3. Handle Cluster Creation or Detection
 echo "Checking if cluster $CLUSTER_NAME exists..."

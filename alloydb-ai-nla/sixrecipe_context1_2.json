@@ -8,8 +8,7 @@
       "manifest": "A given city houses close to good schools, or are great for families with kids.",
       "parameterized": {
         "parameterized_intent": "$1 houses close to good schools.",
-        "parameterized_sql": "Riverside houses close to good schools, or are great for families with kids.",
-        "sql": "SELECT \"p\".\"address_street\", \"s\".\"school_name\", \"stp\".\"proximity_miles\" FROM \"real_estate\".\"properties\" AS \"p\" JOIN \"real_estate\".\"cities\" AS \"c\" ON \"p\".\"city_id\" = \"c\".\"city_id\" JOIN \"real_estate\".\"school_to_property\" AS \"stp\" ON \"p\".\"property_id\" = \"stp\".\"property_id\" JOIN \"real_estate\".\"schools\" AS \"s\" ON \"stp\".\"school_id\" = \"s\".\"school_id\" WHERE \"c\".\"city_name\" = $1 AND \"s\".\"school_ranking\" <= 5 AND \"stp\".\"proximity_miles\" <= 2 ORDER BY 0.8 * \"s\".\"school_ranking\" + 0.2 * \"stp\".\"proximity_miles\""
+        "parameterized_sql": "SELECT \"p\".\"address_street\", \"s\".\"school_name\", \"stp\".\"proximity_miles\" FROM \"real_estate\".\"properties\" AS \"p\" JOIN \"real_estate\".\"cities\" AS \"c\" ON \"p\".\"city_id\" = \"c\".\"city_id\" JOIN \"real_estate\".\"school_to_property\" AS \"stp\" ON \"p\".\"property_id\" = \"stp\".\"property_id\" JOIN \"real_estate\".\"schools\" AS \"s\" ON \"stp\".\"school_id\" = \"s\".\"school_id\" WHERE \"c\".\"city_name\" = $1 AND \"s\".\"school_ranking\" <= 5 AND \"stp\".\"proximity_miles\" <= 2 ORDER BY 0.8 * \"s\".\"school_ranking\" + 0.2 * \"stp\".\"proximity_miles\""
       }
     }
   ]

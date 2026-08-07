@@ -41,12 +41,12 @@
       }
     },
     {
-      "nl_query": "Recommend houses with upgraded kitchen appliences",
+      "nl_query": "Recommend houses with upgraded kitchen appliances",
       "sql": "SELECT \"p\".\"property_id\", \"p\".\"address_street\" FROM \"real_estate\".\"properties\" AS \"p\" WHERE \"p\".listing_status = 'Active' AND \"p\".\"description\" IS NOT NULL ORDER BY google_ml.embedding('gemini-embedding-001', 'Upgraded kitchen appliances')::vector <=> \"p\".\"description_embedding\" LIMIT 200",
-      "intent": "Recommend houses with upgraded kitchen appliences",
-      "manifest": "Recommend houses with upgraded kitchen appliences",
+      "intent": "Recommend houses with upgraded kitchen appliances",
+      "manifest": "Recommend houses with upgraded kitchen appliances",
       "parameterized": {
-        "parameterized_intent": "Recommend houses with upgraded kitchen appliences",
+        "parameterized_intent": "Recommend houses with upgraded kitchen appliances",
         "parameterized_sql": "SELECT \"p\".\"property_id\", \"p\".\"address_street\" FROM \"real_estate\".\"properties\" AS \"p\" WHERE \"p\".listing_status = 'Active' AND \"p\".\"description\" IS NOT NULL ORDER BY google_ml.embedding('gemini-embedding-001', 'Upgraded kitchen appliances')::vector <=> \"p\".\"description_embedding\" LIMIT 200"
       }
     }

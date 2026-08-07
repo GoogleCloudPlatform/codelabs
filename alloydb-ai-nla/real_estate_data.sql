@@ -98,6 +98,11 @@ CREATE TABLE real_estate.offers (
         REFERENCES real_estate.agents(agent_id)
 );
 
+CREATE OR REPLACE FUNCTION real_estate.school_score(school_ranking NUMERIC, proximity_miles NUMERIC)
+RETURNS NUMERIC IMMUTABLE AS $$
+    SELECT 0.8 * school_ranking + 0.2 * proximity_miles;
+$$ LANGUAGE sql;
+
 
 -- Populating municipalities
 INSERT INTO real_estate.municipalities (municipality_name, average_school_ranking, crime_rate_per_100k) VALUES

@@ -118,7 +118,8 @@ def call_querydata_api(
         "generationOptions": {
             "generateNaturalLanguageAnswer": True,
             "generateQueryResult": True,
-            "generateExplanation": True
+            "generateExplanation": True,
+            "generateDisambiguationQuestion": True
         }
     }
 

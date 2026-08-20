@@ -97,8 +97,6 @@ CREATE TABLE real_estate.offers (
         FOREIGN KEY (seller_agent_id)
         REFERENCES real_estate.agents(agent_id)
 );
-
-
 -- Populating municipalities
 INSERT INTO real_estate.municipalities (municipality_name, average_school_ranking, crime_rate_per_100k) VALUES
 ('Waterloo', 8.50, 2900.50),
@@ -121,14 +119,13 @@ INSERT INTO real_estate.cities (municipality_id, city_name, city_province) VALUE
 (8, 'Westwood', 'California');
 -- Populating agents
 INSERT INTO real_estate.agents (firstname, lastname, email, phone, brokerage, is_active) VALUES
-('Liam', 'O''Connell', 'liam.oconnell@broker.ca', '519-555-0011', 'KW Realty', TRUE),
-('Aisha', 'Patel', 'aisha.patel@broker.com', '408-555-0022', 'Silicon Valley Homes', TRUE),
-('Ben', 'Chen', 'ben.chen@broker.ca', '519-555-0033', 'KW Realty', TRUE),
-('Chloe', 'Davis', 'chloe.davis@broker.com', '951-555-0044', 'Riverside Estates', TRUE),
-('David', 'Kim', 'david.kim@broker.com', '619-555-0055', 'Pacific Coast Homes', TRUE),
-('Sarah', 'Miller', 'sarah.miller@broker.com', '858-555-0066', 'Coastal Luxury Group', TRUE),
-('Chris', 'Foster', 'chris.foster@westwood.com', '310-555-0077', 'Westwood', TRUE);
-
+('Liam', 'O''Connell', 'liam.oconnell@example.com', '519-555-0011', 'KW Realty', TRUE),
+('Aisha', 'Patel', 'aisha.patel@example.com', '408-555-0022', 'Silicon Valley Homes', TRUE),
+('Ben', 'Chen', 'ben.chen@example.com', '519-555-0033', 'KW Realty', TRUE),
+('Chloe', 'Davis', 'chloe.davis@example.com', '951-555-0044', 'Riverside Estates', TRUE),
+('David', 'Kim', 'david.kim@example.com', '619-555-0055', 'Pacific Coast Homes', TRUE),
+('Sarah', 'Miller', 'sarah.miller@example.com', '858-555-0066', 'Coastal Luxury Group', TRUE),
+('Chris', 'Foster', 'chris.foster@example.com', '310-555-0077', 'Westwood', TRUE);
 -- Populating properties
 INSERT INTO real_estate.properties (property_id, address_street, city_id, address_postal_code, price, bedrooms, bathrooms, listing_status, is_single_family, is_condo, has_garage, num_stories) VALUES
 (1, '123 University Ave W', 1, 'N2L 3G7', 750000.00, 3, 2.5, 'Active', FALSE, FALSE, TRUE, 2),
@@ -163,8 +160,6 @@ INSERT INTO real_estate.properties (property_id, address_street, city_id, addres
 (30, '450 Veteran Ave', 7, '90024', 3800000.00, 4, 3.5, 'Pending', TRUE, FALSE, TRUE, 2),
 (31, '999 Main Ave', 6, '90024', 3800000.00, 4, 3.5, 'Active', TRUE, FALSE, TRUE, 1),
 (32, '999 Main St', 8, '99999', 3800000.00, 4, 3.5, 'Sold', TRUE, FALSE, TRUE, 1);
-
-
 -- ID 3: Waterfront (Lake/River, updated to panoramic vista)
 UPDATE real_estate.properties
 SET description = 'Spacious 4-bedroom executive home on a half-acre lot. This beautiful property features an unobstructed, panoramic view of the lake, offering a truly breathtaking lifestyle. Includes two fireplaces and a triple garage.'
@@ -242,8 +237,7 @@ INSERT INTO real_estate.property_transactions (property_id, sale_date, sale_pric
 (10, '2025-09-01', 550000.00, 4),
 (18, '2025-08-28', 610000.00, 4),
 (27, '2025-10-10', 6450000.00, 6),
-(30, '2025-09-30', 3800000.00, 7),
-(32, '2025-09-12', 1000000, 7);
+(30, '2025-09-30', 3800000.00, 7);
 -- Populating offers
 INSERT INTO real_estate.offers (offer_id, property_id, buyer_agent_id, seller_agent_id, offer_amount, offer_date, offer_status, offer_expiration_date, contingencies) VALUES
 (1, 3, 3, 1, 1250000.00, '2025-05-18', 'ACCEPTED', '2025-05-20', 'Clear closing in 5 days'),

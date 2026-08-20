@@ -137,7 +137,7 @@ skill_toolset = SkillToolset(
     skills=[database_query_skill]
 )
 
-MODEL_ID = "gemini-3.6-flash"
+MODEL_ID = "gemini-3.5-flash"
 
 # Agent configuration
 

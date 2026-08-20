@@ -1,12 +1,12 @@
 {
   "facets": [
     {
-      "sql_snippet": "real_estate.properties.is_condo = FALSE AND real_estate.properties.is_single_family = TRUE AND real_estate.properties.listing_status = 'Active' AND real_estate.properties.bedrooms BETWEEN 3 AND 4 AND real_estate.properties.bathrooms >= 2.0 AND 500 > (SELECT m.crime_rate_per_100k FROM real_estate.cities c JOIN real_estate.municipalities m ON c.municipality_id = m.municipality_id AND c.city_id = real_estate.properties.city_id) AND 2 >= (SELECT MIN(stp.proximity_miles) FROM real_estate.school_to_property stp WHERE real_estate.properties.property_id = stp.property_id)",
-      "intent": "for starter family (between 3 and 4 bedrooms, 2+ bathrooms, low crime and close proximity to schools)",
-      "manifest": "for starter family",
+      "sql_snippet": "real_estate.properties.is_single_family = TRUE AND real_estate.properties.listing_status = 'Active' AND real_estate.properties.bedrooms BETWEEN 3 AND 4 AND real_estate.properties.bathrooms >= 2.0 AND 500 > (SELECT m.crime_rate_per_100k FROM real_estate.cities c JOIN real_estate.municipalities m ON c.municipality_id = m.municipality_id AND c.city_id = real_estate.properties.city_id)",
+      "intent": "for a starter family (active single-family home listings with 3 to 4 bedrooms, 2+ bathrooms, and a crime rate under 500 per 100,000 residents)",
+      "manifest": "for a starter family",
       "parameterized": {
-        "parameterized_intent": "for starter family (between 3 and 4 bedrooms, 2+ bathrooms, low crime and close proximity to schools)",
-        "parameterized_sql_snippet": "real_estate.properties.is_condo = FALSE AND real_estate.properties.is_single_family = TRUE AND real_estate.properties.listing_status = 'Active' AND real_estate.properties.bedrooms BETWEEN 3 AND 4 AND real_estate.properties.bathrooms >= 2.0 AND 500 > (SELECT m.crime_rate_per_100k FROM real_estate.cities c JOIN real_estate.municipalities m ON c.municipality_id = m.municipality_id AND c.city_id = real_estate.properties.city_id) AND 2 >= (SELECT MIN(stp.proximity_miles) FROM real_estate.school_to_property stp WHERE real_estate.properties.property_id = stp.property_id)"
+        "parameterized_intent": "for a starter family (active single-family home listings with 3 to 4 bedrooms, 2+ bathrooms, and a crime rate under 500 per 100,000 residents)",
+        "parameterized_sql_snippet": "real_estate.properties.is_single_family = TRUE AND real_estate.properties.listing_status = 'Active' AND real_estate.properties.bedrooms BETWEEN 3 AND 4 AND real_estate.properties.bathrooms >= 2.0 AND 500 > (SELECT m.crime_rate_per_100k FROM real_estate.cities c JOIN real_estate.municipalities m ON c.municipality_id = m.municipality_id AND c.city_id = real_estate.properties.city_id)"
       }
     }
   ],

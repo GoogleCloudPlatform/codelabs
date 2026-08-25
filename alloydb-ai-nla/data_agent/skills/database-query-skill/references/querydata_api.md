@@ -60,7 +60,8 @@ curl -X POST "https://geminidataanalytics.googleapis.com/v1beta/projects/${GOOGL
   \"generationOptions\": {
     \"generateNaturalLanguageAnswer\": true,
     \"generateQueryResult\": true,
-    \"generateExplanation\": true
+    \"generateExplanation\": true,
+    \"generateDisambiguationQuestion\": true
   }
 }"
 ```

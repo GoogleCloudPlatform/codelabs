@@ -10,12 +10,21 @@
       }
     },
     {
-      "sql_snippet": "((p.description_embedding <=> google_ml.embedding('gemini-embedding-001', 'unobstructed, panoramic, ocean vista, vast Pacific, breathtaking, commanding view, deep blue horizon, massive, sweeping view')::vector) < 0.4)",
+      "sql_snippet": "((real_estate.properties.description_embedding <=> google_ml.embedding('gemini-embedding-001', 'unobstructed, panoramic, ocean vista, vast Pacific, breathtaking, commanding view, deep blue horizon, massive, sweeping view')::vector) < 0.4)",
       "intent": "with ocean view",
       "manifest": "with ocean view",
       "parameterized": {
         "parameterized_intent": "with ocean view",
-        "parameterized_sql_snippet": "((p.description_embedding <=> google_ml.embedding('gemini-embedding-001', 'unobstructed, panoramic, ocean vista, vast Pacific, breathtaking, commanding view, deep blue horizon, massive, sweeping view')::vector) < 0.4)"
+        "parameterized_sql_snippet": "((real_estate.properties.description_embedding <=> google_ml.embedding('gemini-embedding-001', 'unobstructed, panoramic, ocean vista, vast Pacific, breathtaking, commanding view, deep blue horizon, massive, sweeping view')::vector) < 0.4)"
+      }
+    },
+    {
+      "sql_snippet": "((real_estate.properties.description_embedding <=> google_ml.embedding('gemini-embedding-001', 'Upgraded kitchen appliances')::vector) < 0.4)",
+      "intent": "with upgraded kitchen appliances",
+      "manifest": "with upgraded kitchen appliances",
+      "parameterized": {
+        "parameterized_intent": "with upgraded kitchen appliances",
+        "parameterized_sql_snippet": "((real_estate.properties.description_embedding <=> google_ml.embedding('gemini-embedding-001', 'Upgraded kitchen appliances')::vector) < 0.4)"
       }
     }
   ],
@@ -23,31 +32,21 @@
     {
       "nl_query": "Riverside houses close to good schools.",
       "sql": "SELECT \"p\".\"address_street\", \"p\".\"address_postal_code\", \"s\".\"school_name\", \"stp\".\"proximity_miles\" FROM \"real_estate\".\"properties\" AS \"p\" JOIN \"real_estate\".\"cities\" AS \"c\" ON \"p\".\"city_id\" = \"c\".\"city_id\" JOIN \"real_estate\".\"school_to_property\" AS \"stp\" ON \"p\".\"property_id\" = \"stp\".\"property_id\" JOIN \"real_estate\".\"schools\" AS \"s\" ON \"stp\".\"school_id\" = \"s\".\"school_id\" WHERE \"c\".\"city_name\" = 'Riverside' AND \"s\".\"school_ranking\" <= 5 AND \"stp\".\"proximity_miles\" <= 2 ORDER BY 0.8 * \"s\".\"school_ranking\" + 0.2 * \"stp\".\"proximity_miles\"",
-      "intent": "Riverside houses close to good schools.",
+      "intent": "Houses in Riverside close to good schools (within 2 miles of schools with a rank of at least 5).",
       "manifest": "A given city houses close to good schools.",
       "parameterized": {
-        "parameterized_intent": "$1 houses close to good schools.",
+        "parameterized_intent": "Houses in $1 close to good schools (within 2 miles of schools with a rank of at least 5).",
         "parameterized_sql": "SELECT \"p\".\"address_street\", \"p\".\"address_postal_code\", \"s\".\"school_name\", \"stp\".\"proximity_miles\" FROM \"real_estate\".\"properties\" AS \"p\" JOIN \"real_estate\".\"cities\" AS \"c\" ON \"p\".\"city_id\" = \"c\".\"city_id\" JOIN \"real_estate\".\"school_to_property\" AS \"stp\" ON \"p\".\"property_id\" = \"stp\".\"property_id\" JOIN \"real_estate\".\"schools\" AS \"s\" ON \"stp\".\"school_id\" = \"s\".\"school_id\" WHERE \"c\".\"city_name\" = $1 AND \"s\".\"school_ranking\" <= 5 AND \"stp\".\"proximity_miles\" <= 2 ORDER BY 0.8 * \"s\".\"school_ranking\" + 0.2 * \"stp\".\"proximity_miles\""
       }
     },
     {
       "nl_query": "List Move-in ready houses",
-      "sql": "SELECT \"p\".\"address_street\", \"p\".\"address_postal_code\" FROM \"real_estate\".\"properties\" AS \"p\" WHERE \"p\".listing_status = 'Active' AND \"p\".\"description\" IS NOT NULL AND ai.if('Does this description represents Move-in ready house? Description: ' || \"p\".\"description\")",
+      "sql": "SELECT \"p\".\"address_street\", \"p\".\"address_postal_code\" FROM \"real_estate\".\"properties\" AS \"p\" WHERE \"p\".listing_status = 'Active' AND \"p\".\"description\" IS NOT NULL AND ai.if('Does this description represent a Move-in ready house? Description: ' || \"p\".\"description\")",
       "intent": "List Move-in ready houses",
       "manifest": "List Move-in ready houses",
       "parameterized": {
         "parameterized_intent": "List Move-in ready houses",
-        "parameterized_sql": "SELECT \"p\".\"address_street\", \"p\".\"address_postal_code\" FROM \"real_estate\".\"properties\" AS \"p\" WHERE \"p\".listing_status = 'Active' AND \"p\".\"description\" IS NOT NULL AND ai.if('Does this description represents Move-in ready house? Description: ' || \"p\".\"description\")"
-      }
-    },
-    {
-      "nl_query": "Recommend houses with upgraded kitchen appliances",
-      "sql": "SELECT \"p\".\"property_id\", \"p\".\"address_street\" FROM \"real_estate\".\"properties\" AS \"p\" WHERE \"p\".listing_status = 'Active' AND \"p\".\"description\" IS NOT NULL ORDER BY google_ml.embedding('gemini-embedding-001', 'Upgraded kitchen appliances')::vector <=> \"p\".\"description_embedding\" LIMIT 200",
-      "intent": "Recommend houses with upgraded kitchen appliances",
-      "manifest": "Recommend houses with upgraded kitchen appliances",
-      "parameterized": {
-        "parameterized_intent": "Recommend houses with upgraded kitchen appliances",
-        "parameterized_sql": "SELECT \"p\".\"property_id\", \"p\".\"address_street\" FROM \"real_estate\".\"properties\" AS \"p\" WHERE \"p\".listing_status = 'Active' AND \"p\".\"description\" IS NOT NULL ORDER BY google_ml.embedding('gemini-embedding-001', 'Upgraded kitchen appliances')::vector <=> \"p\".\"description_embedding\" LIMIT 200"
+        "parameterized_sql": "SELECT \"p\".\"address_street\", \"p\".\"address_postal_code\" FROM \"real_estate\".\"properties\" AS \"p\" WHERE \"p\".listing_status = 'Active' AND \"p\".\"description\" IS NOT NULL AND ai.if('Does this description represent a Move-in ready house? Description: ' || \"p\".\"description\")"
       }
     }
   ],

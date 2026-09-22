@@ -237,7 +237,8 @@ INSERT INTO real_estate.property_transactions (property_id, sale_date, sale_pric
 (10, '2025-09-01', 550000.00, 4),
 (18, '2025-08-28', 610000.00, 4),
 (27, '2025-10-10', 6450000.00, 6),
-(30, '2025-09-30', 3800000.00, 7);
+(30, '2025-09-30', 3800000.00, 7)
+(32, '2025-09-12', 1000000.00, 7);
 -- Populating offers
 INSERT INTO real_estate.offers (offer_id, property_id, buyer_agent_id, seller_agent_id, offer_amount, offer_date, offer_status, offer_expiration_date, contingencies) VALUES
 (1, 3, 3, 1, 1250000.00, '2025-05-18', 'ACCEPTED', '2025-05-20', 'Clear closing in 5 days'),

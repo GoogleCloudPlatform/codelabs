@@ -33,7 +33,7 @@ mcp_toolset = ToolboxToolset(
     server_url=MCP_SERVER_URL,
 )
 
-MODEL_ID = "gemini-3-flash-preview"
+MODEL_ID = "gemini-3.5-flash"
 cluster_name="alloydb-aip-01"
 instance_name="alloydb-aip-01-pr"
 location="us-central1"

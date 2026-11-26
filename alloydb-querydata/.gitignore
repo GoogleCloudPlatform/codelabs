@@ -49,3 +49,8 @@ Thumbs.db
 # Files that might be created on external drives or network shares
 .Spotlight-V100
 .Trashes
+
+# Lab
+data_agent/querydata_cymbal_contextset.json
+tools.yaml
+querydata.yaml

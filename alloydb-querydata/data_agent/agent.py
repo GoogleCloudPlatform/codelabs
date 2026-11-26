@@ -33,10 +33,10 @@ mcp_toolset = ToolboxToolset(
     server_url=MCP_SERVER_URL,
 )
 
-MODEL_ID = "gemini-3.5-flash"
+MODEL_ID = "gemini-4-hydrogen"
 cluster_name="alloydb-aip-01"
 instance_name="alloydb-aip-01-pr"
-location="us-central1"
+location="us-west1"
 database_name="quickstart_db"
 
 # Agent configuration

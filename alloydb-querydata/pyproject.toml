@@ -19,6 +19,6 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12.11"
 dependencies = [
-    "google-adk[toolbox]>=1.28.0",
+    "google-adk[toolbox]>=2.15.0",
     "google-auth>=2.48.0",
 ]

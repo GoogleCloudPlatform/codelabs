@@ -4,11 +4,11 @@ This script automates the deployment of an AlloyDB cluster and primary instance 
 
 ## Features
 
-- **Automated Networking**: Detects if VPC peering for Private Service Access is configured. If not, it creates a `/24` IP range (`psa-range`) and connects it to the Service Networking API.
-- **Smart Cluster Creation**: Attempts to create a **Free Trial** cluster first. If the project is ineligible or the request fails, it automatically falls back to a **Standard** cluster.
+- **Automated Networking**: Uses Private Service Connect (PSC) and optional Public DNS for AlloyDB Express clusters. When falling back to a Standard cluster, detects if VPC peering for Private Service Access is configured and creates a `/24` IP range (`psa-range`) connected to the Service Networking API if needed.
+- **Smart Cluster Creation**: Attempts to create an **AlloyDB Express** cluster (1 vCPU, zonal) first. If Express is unavailable in the selected region or the request fails, it automatically falls back to a **Standard** cluster.
 - **Secure Credentials**: Generates a random 16-character password for the initial `postgres` user.
 - **Optional Bastion VM**: Can provision a Compute Engine instance (`instance-1`) with the `postgresql-client` pre-installed for immediate connectivity testing.
-- **Public IP Support**: Includes a flag to optionally enable inbound and outbound public IPv4 addresses on the primary instance.
+- **Public Connectivity Support**: Includes `--public-ip` to enable Public DNS on AlloyDB Express instances or inbound and outbound public IPv4 addresses on Standard instances.
 
 ## Prerequisites
 
@@ -19,19 +19,19 @@ This script automates the deployment of an AlloyDB cluster and primary instance 
 ## Usage
 
 ### Basic Deployment
-Deploys the cluster and primary instance in `us-central1` using default names.
+Deploys the cluster and primary instance in `us-west1` using default names.
 ```bash
 ./deploy_alloydb.sh
 ```
 
 ### Deployment with Bastion VM
-Deploys the cluster, instance, and a VM in `us-central1`.
+Deploys the cluster, instance, and a VM in `us-west1`.
 ```bash
 ./deploy_alloydb.sh --vm
 ```
 
-### Deployment with Public IP
-Deploys the cluster and primary instance, assigning both inbound and outbound public IPv4 addresses to the instance.
+### Deployment with Public DNS / Public IP
+Deploys the cluster and primary instance with Public DNS (for AlloyDB Express) or inbound and outbound public IPv4 addresses (for Standard clusters).
 ```bash
 ./deploy_alloydb.sh --public-ip
 ```
@@ -55,7 +55,7 @@ VM_NAME="db-bastion" \
 
 | Parameter | Default Value | Flag | Environment Variable |
 |-----------|---------------|------|----------------------|
-| Region    | `us-central1` | `--region` | -              |
+| Region    | `us-west1`    | `--region` | -              |
 | Cluster   | `alloydb-aip-01` | - | `CLUSTER_NAME`    |
 | Instance  | `alloydb-aip-01-pr` | - | `INSTANCE_NAME` |
 | VM Name   | `instance-1`  | - | `VM_NAME`            |

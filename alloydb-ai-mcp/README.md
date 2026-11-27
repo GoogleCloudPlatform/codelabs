@@ -18,13 +18,13 @@ This script automates the deployment of an AlloyDB cluster and primary instance 
 ## Usage
 
 ### Basic Deployment
-Deploys the cluster and primary instance in `us-central1` using default names.
+Deploys the cluster and primary instance in `us-west1` using default names.
 ```bash
 ./deploy_alloydb.sh
 ```
 
 ### Deployment with Bastion VM
-Deploys the cluster, instance, and a VM in `us-central1`.
+Deploys the cluster, instance, and a VM in `us-west1`.
 ```bash
 ./deploy_alloydb.sh --vm
 ```
@@ -48,7 +48,7 @@ VM_NAME="db-bastion" \
 
 | Parameter | Default Value | Flag | Environment Variable |
 |-----------|---------------|------|----------------------|
-| Region    | `us-central1` | `--region` | -              |
+| Region    | `us-west1` | `--region` | `REGION`         |
 | Cluster   | `alloydb-aip-01` | - | `CLUSTER_NAME`    |
 | Instance  | `alloydb-aip-01-pr` | - | `INSTANCE_NAME` |
 | VM Name   | `instance-1`  | - | `VM_NAME`            |

@@ -16,7 +16,7 @@
 
 # Default Configuration
 PROJECT_ID=$(gcloud config get-value project)
-REGION="us-central1"
+REGION=${REGION:-"us-west1"}
 CLUSTER_NAME=${CLUSTER_NAME:-"alloydb-aip-01"}
 INSTANCE_NAME=${INSTANCE_NAME:-"alloydb-aip-01-pr"}
 NETWORK="default"

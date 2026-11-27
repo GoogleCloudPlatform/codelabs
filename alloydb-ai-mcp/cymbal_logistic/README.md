@@ -20,7 +20,7 @@ The agent has direct context of the `quickstart_db` logistics database and allow
 
 ## How To Run
 
-1. Clone the project and configure `data_agent/.env`. Make sure `uv` is installed on your OS.
+1. Clone the project and configure `data_agent/.env` (you can copy `data_agent/.env.example` as a starting point). Make sure `uv` is installed on your OS.
 2. Ensure you are authenticated with GCP via `gcloud auth application-default login`.
 3. In the root directory, simply run:
 ```bash
@@ -38,7 +38,7 @@ The repository includes a `Dockerfile` designed for a serverless environment lik
 ```bash
 gcloud run deploy cymbal-logistic-app \\
   --source . \\
-  --region us-central1 \\
+  --region us-west1 \\
   --allow-unauthenticated
 ```
 3. Provide your environment variables (like `PROJECT_ID` and GCP Database configurations) either during the deployment prompt or via the GCP Web Console.

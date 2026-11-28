@@ -13,10 +13,12 @@
 # limitations under the License.
 
 import mesop as me
+from collections import OrderedDict
 from dataclasses import field
 import sys
 import os
 import asyncio
+import threading
 import pandas as pd
 import json
 import matplotlib
@@ -24,6 +26,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import uuid
 from dotenv import load_dotenv
+from flask import request as flask_request
 
 env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data_agent", ".env")
 load_dotenv(env_path)
@@ -32,22 +35,80 @@ load_dotenv(env_path)
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from data_agent.agent import root_agent
+from data_agent.agent import (
+    MODEL_ID,
+    build_instruction,
+    cluster_name as DEFAULT_CLUSTER_NAME,
+    create_agent,
+    database_name as DEFAULT_DATABASE_NAME,
+    instance_name as DEFAULT_INSTANCE_NAME,
+    location as DEFAULT_LOCATION,
+    project_id,
+)
 from google.adk.runners import Runner
 from google.adk.sessions.in_memory_session_service import InMemorySessionService
 from google.genai import types
 
-GLOBAL_SESSION_SERVICE = InMemorySessionService()
+# Isolate InMemorySessionService instances per (user_id, session_id) with bounded LRU eviction
+_MAX_SESSION_SERVICES = 256
+_SESSION_SERVICES_LOCK = threading.Lock()
+_SESSION_SERVICES: OrderedDict[tuple[str, str], InMemorySessionService] = OrderedDict()
+
+_AUTH_PRINCIPAL_HEADERS = (
+    "X-Goog-Authenticated-User-ID",
+    "X-Goog-Authenticated-User-Email",
+    "X-Forwarded-User",
+    "X-Auth-Request-User",
+)
+
+
+def get_session_service(user_id: str, session_id: str) -> InMemorySessionService:
+    """Return an isolated InMemorySessionService dedicated to (user_id, session_id)."""
+    key = (user_id, session_id)
+    with _SESSION_SERVICES_LOCK:
+        service = _SESSION_SERVICES.get(key)
+        if service is None:
+            service = InMemorySessionService()
+            _SESSION_SERVICES[key] = service
+            if len(_SESSION_SERVICES) > _MAX_SESSION_SERVICES:
+                _SESSION_SERVICES.popitem(last=False)
+        else:
+            _SESSION_SERVICES.move_to_end(key)
+        return service
+
+
+def evict_session_service(user_id: str, session_id: str) -> None:
+    """Remove a session's InMemorySessionService when the session is rotated."""
+    with _SESSION_SERVICES_LOCK:
+        _SESSION_SERVICES.pop((user_id, session_id), None)
+
+
+def resolve_user_id(state) -> str:
+    """Derive user_id from an authenticated principal header, or a per-session random ID."""
+    try:
+        for header in _AUTH_PRINCIPAL_HEADERS:
+            principal = flask_request.headers.get(header, "").strip()
+            if principal:
+                state.user_id = principal
+                return principal
+    except RuntimeError:
+        # Outside of a Flask request context (e.g. unit tests)
+        pass
+
+    if not state.user_id:
+        state.user_id = f"user_{uuid.uuid4().hex}"
+    return state.user_id
 
 def on_load(e: me.LoadEvent):
     me.set_theme_mode("light")
 
 @me.stateclass
 class State:
-    cluster_name: str = "alloydb-aip-01"
-    location: str = "us-central1"
-    instance_name: str = "alloydb-aip-01-pr"
-    database_name: str = "quickstart_db"
+    cluster_name: str = DEFAULT_CLUSTER_NAME
+    location: str = DEFAULT_LOCATION
+    instance_name: str = DEFAULT_INSTANCE_NAME
+    database_name: str = DEFAULT_DATABASE_NAME
+    model_id: str = MODEL_ID
     request_text: str = ""
     response_text: str = ""
     is_loading: bool = False
@@ -59,6 +120,7 @@ class State:
     enable_debug: bool = False
     query_history_json: str = "[]"
     active_query_tab: int = 0
+    user_id: str = ""
     session_id: str = ""
     conversation_history: list[str] = field(default_factory=list)
     context_summary: str = ""
@@ -83,6 +145,10 @@ def on_database_name_change(e: me.InputBlurEvent):
     state = me.state(State)
     state.database_name = e.value
 
+def on_model_id_change(e: me.InputBlurEvent):
+    state = me.state(State)
+    state.model_id = e.value
+
 def on_request_change(e: me.InputBlurEvent):
     state = me.state(State)
     state.request_text = e.value
@@ -92,33 +158,54 @@ def on_debug_change(e: me.CheckboxChangeEvent):
     state.enable_debug = e.checked
 
 class FrontendRunner:
-    def __init__(self):
-        self.session_service = GLOBAL_SESSION_SERVICE
+    def __init__(
+        self,
+        instruction: str,
+        model_id: str = MODEL_ID,
+        session_service: InMemorySessionService | None = None,
+    ):
+        self.agent = create_agent(instruction=instruction, model_id=model_id)
+        self.session_service = (
+            session_service if session_service is not None else InMemorySessionService()
+        )
         self.runner = Runner(
             app_name="cymbal_logistic_frontend",
-            agent=root_agent,
+            agent=self.agent,
             session_service=self.session_service,
-            auto_create_session=True
+            auto_create_session=True,
         )
 
-# We create a new runner instance per request to avoid session locking bugs
-def run_query_sync(request_text, cluster_name, location, instance_name, database_name, project_id, session_id, summary):
-    local_runner = FrontendRunner()
-    
-    instruction = f"""
-    Answer user questions to the best of your knowledge using provided tools.
-    Do not try to generate non-existent data but use the grounded data from the database.
-    When you answer questions about Cymbal Logistic activity
-    use the toolset to run query in the AlloyDB cluster {cluster_name} instance {instance_name} in the location {location}
-    in the project {project_id} in the database {database_name}
-    Use ai schema to use AI functions and the models like gemini-3.5-flash with the functions from the schema.
-    """
-    
-    if summary:
-        instruction = f"Here is a summary of the previous conversation context to help you answer subsequent questions:\n{summary}\n\n" + instruction
-        
-    root_agent.instruction = instruction
-    
+# Create a fresh Agent and Runner per request so concurrent users never share mutable state
+def run_query_sync(
+    request_text,
+    cluster_name,
+    location,
+    instance_name,
+    database_name,
+    project_id,
+    session_id,
+    summary,
+    user_id="",
+    session_service=None,
+    model_id=MODEL_ID,
+):
+    effective_model_id = model_id or MODEL_ID
+    instruction = build_instruction(
+        cluster_name=cluster_name,
+        instance_name=instance_name,
+        location=location,
+        database_name=database_name,
+        project_id=project_id,
+        summary=summary,
+        model_id=effective_model_id,
+    )
+    effective_user_id = user_id or f"user_{uuid.uuid4().hex}"
+    local_runner = FrontendRunner(
+        instruction=instruction,
+        model_id=effective_model_id,
+        session_service=session_service,
+    )
+
     msg = types.Content(
         role="user",
         parts=[types.Part.from_text(text=request_text)]
@@ -130,9 +217,7 @@ def run_query_sync(request_text, cluster_name, location, instance_name, database
     debug_logs = []
     query_history_list = []
     last_sql = ""
-    
-    current_session_id = f"session_mesop_{uuid.uuid4().hex[:8]}"
-    
+
     # Python 3.7+ async run
     try:
         loop = asyncio.get_event_loop()
@@ -143,9 +228,9 @@ def run_query_sync(request_text, cluster_name, location, instance_name, database
     if loop.is_running():
         import nest_asyncio
         nest_asyncio.apply()
-        
+
     async_gen = local_runner.runner.run_async(
-        user_id="mesop_user",
+        user_id=effective_user_id,
         session_id=session_id,
         new_message=msg
     )
@@ -260,14 +345,14 @@ def run_query_sync(request_text, cluster_name, location, instance_name, database
                         })
                                 
                         # Compact Debug Log Formatting
-                        if name == "execute_sql_read_only":
+                        if name in ("execute_sql_read_only", "execute_sql"):
                             num_rows = len(rows)
                             preview = ""
                             if rows:
                                 preview = json.dumps(rows[:3], indent=2)
                                 if len(rows) > 3:
                                     preview += f"\n... ({len(rows) - 3} more rows)"
-                            log_entry = f"✅ **Function Response**: `execute_sql_read_only` - Returned {num_rows} row(s)\n```json\n{preview}\n```"
+                            log_entry = f"✅ **Function Response**: `{name}` - Returned {num_rows} row(s)\n```json\n{preview}\n```"
                         else:
                             try:
                                 resp_str = json.dumps(response, indent=2)
@@ -305,49 +390,57 @@ def submit_query(e: me.ClickEvent):
     state.active_query_tab = 0
     yield
 
-    from data_agent.agent import project_id
-    
+    user_id = resolve_user_id(state)
+
     if not state.session_id:
-        state.session_id = f"session_mesop_{uuid.uuid4().hex[:8]}"
-        
+        state.session_id = f"session_mesop_{uuid.uuid4().hex}"
+
     # Check for compression (threshold: ~500k tokens -> ~2M chars)
     history_text = "\n".join(state.conversation_history)
     if len(history_text) > 2000000:
         summary_prompt = f"Summarize the following conversation history concisely. Focus on the key facts and results retrieved so far:\n\n{history_text}"
-        temp_session_id = f"session_summary_{uuid.uuid4().hex[:8]}"
+        temp_session_id = f"session_summary_{uuid.uuid4().hex}"
         summary_response = ""
-        # Call without summary to avoid recursion
+        # Call without summary and with an ephemeral session service to avoid recursion/state pollution
         for resp_t, _, _, _, _ in run_query_sync(
-            summary_prompt, 
-            state.cluster_name, 
+            summary_prompt,
+            state.cluster_name,
             state.location,
-            state.instance_name, 
-            state.database_name, 
+            state.instance_name,
+            state.database_name,
             project_id,
             temp_session_id,
-            ""
+            "",
+            user_id=user_id,
+            session_service=InMemorySessionService(),
+            model_id=state.model_id,
         ):
             summary_response = resp_t
-            
+
         state.context_summary = summary_response
         state.conversation_history = []
-        # Generate a new session ID to effectively clear the ADK session history
-        state.session_id = f"session_mesop_{uuid.uuid4().hex[:8]}"
-        
+        # Rotate session ID and evict old session service to clear ADK session history
+        evict_session_service(user_id, state.session_id)
+        state.session_id = f"session_mesop_{uuid.uuid4().hex}"
+
     response_text = ""
     headers = []
     rows = []
     debug_text = ""
 
+    session_service = get_session_service(user_id, state.session_id)
     for resp_t, heads, rws, dbg_t, history in run_query_sync(
-        state.request_text, 
-        state.cluster_name, 
+        state.request_text,
+        state.cluster_name,
         state.location,
-        state.instance_name, 
-        state.database_name, 
+        state.instance_name,
+        state.database_name,
         project_id,
         state.session_id,
-        state.context_summary
+        state.context_summary,
+        user_id=user_id,
+        session_service=session_service,
+        model_id=state.model_id,
     ):
         response_text = resp_t
         headers = heads
@@ -516,6 +609,13 @@ def app():
                 label="Database Name",
                 value=state.database_name,
                 on_blur=on_database_name_change,
+                appearance="outline",
+                style=me.Style(width="100%", border_radius=4)
+            )
+            me.input(
+                label="Model ID",
+                value=state.model_id,
+                on_blur=on_model_id_change,
                 appearance="outline",
                 style=me.Style(width="100%", border_radius=4)
             )
